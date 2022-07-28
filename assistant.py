@@ -1,7 +1,7 @@
 import sys
+import re
 
-
-min_len = 7  # minimal number of digits in phone number
+phone_pattern = "\+?[-\s]?(?:\d{2,3})?[-\s]?(?:\([-\s]?\d{2,3}[-\s]?\)|\d{2,3})?[-\s]?\d{2,3}[-\s]?\d{2,3}[-\s]?\d{2,3}"
 
 phone_book = {
 }
@@ -10,7 +10,8 @@ phone_book = {
 errors = {
     "not_found": lambda *_: "Sorry I can't understand you. Use 'help' to see what I can.",
     "missing_name": lambda *_: "It seems that you missed the name of contact. Please, try again.",
-    "missing_number": lambda *_: "Phone number has not been detected.",
+    "missing_number": lambda *_: """Sorry, I can't identify a valid phone number.
+Try 'help' command to see allowed formats.""",
     "name_exists": lambda x: "Contact '{}' already exists. Try 'change' command to rewrite it.".format(x),
     "name_not_found": lambda x: "Contact '{}' does not exist. Try 'add' command to create a new contact.".format(x),
     "invalid_number": lambda x: "It seems that '{}' is not a valid phone number. Please, try again"
@@ -20,6 +21,20 @@ errors = {
 }
 
 
+def find_name_number(text: str):  # return tuple of name and number
+    pattern = re.compile(phone_pattern)
+    only_name = text
+    if not pattern.findall(text):
+        return find_name(text), ""
+    for x in pattern.findall(text):
+        only_name = only_name.replace(x, "")
+    return find_name(only_name), str(pattern.findall(text)[0]).strip().replace(" ", "").replace("", ""),
+
+
+def find_name(text: str):  # converts text into name. Should be used only after the numer has been extracted.
+    return text.strip().lower().title()
+
+
 def log_decorator(func):
     def inner(*args, **kwargs):
         result = func(*args, **kwargs)
@@ -27,39 +42,10 @@ def log_decorator(func):
             return result
         errcode = result[0] if type(result) == tuple else result
         if errcode in errors.keys():
-
-            return "Warning: " + errors[errcode](result[1] if type(result) == tuple else " ")
+            return errors[errcode](result[1] if type(result) == tuple else " ")
         else:
             return result
     return inner
-
-
-def not_a_phone_number(number: str):
-    digits = 0
-    non_digits = 0
-    if number.count("+") > 1:
-        return True
-    elif number.count("+") == 1 and number[0] != "+":
-        return True
-    left_b = number.count("(")
-    right_b = number.count(")")
-    if not(left_b == right_b and (left_b == 1 or left_b == 0)):
-        return True
-    for i in number:
-        if i.isdigit():
-            digits += 1
-        elif i not in ("-", " ", ")", "(", "+"):
-            non_digits += 1
-    if digits < min_len or non_digits > 0:
-        return True
-    return False
-
-
-def not_a_name(name: str):
-    for s in name:
-        if s.isalpha():
-            return False
-    return True
 
 
 @log_decorator
@@ -76,20 +62,15 @@ def show_all(*_):
 
 
 @log_decorator
-def add(command: str):
+def add(data: str):
     try:
-        name = " ".join(command.split(" ")[1:-1]).lower().title()
-        number = command.split(" ")[-1]
-        if len(command.split()) < 3:
-            return "name_number", "add"
-        if not_a_name(name):
-            return "missing_name"
+        name, number = find_name_number(data)
+        if not name:
+            return "missing_name", "add"
+        if name in phone_book.keys():
+            return "name_exists", name
         if not number:
             return "missing_number"
-        if not_a_phone_number(number):
-            return "invalid_number", number
-        elif name in phone_book.keys():
-            return "name_exists", name
         else:
             phone_book[name] = number
             return f"Contact '{name}': '{number}' has been added to your phone book."
@@ -98,33 +79,28 @@ def add(command: str):
 
 
 @log_decorator
-def change(command: str):
+def change(data: str):
     try:
-        name = " ".join(command.split(" ")[1:-1]).lower().title()
-        number = command.split(" ")[-1]
-        if len(command.split()) < 3:
-            return "name_number", 'change'
-        if not_a_name(name):
-            return "missing_name"
+        name, number = find_name_number(data)
+        if not name:
+            return "missing_name", "add"
+        if name not in phone_book.keys():
+            return "name_not_found", name
         if not number:
             return "missing_number"
-        elif not not_a_phone_number(number) and name in phone_book.keys():
+        else:
             phone_book.update({name: number})
             return f"Contact '{name}' has been changed to '{number}'."
-        elif not (name in phone_book.keys()):
-            return "name_not_found", name
-        else:
-            return "invalid_number", number
     except Exception as err:
         return err
 
 
 @log_decorator
-def phone(command: str):
+def phone(data: str):
     try:
-        if len(command.split()) < 2:
+        name = find_name(data)
+        if not name:
             return "missing_name"
-        name = " ".join(command.split(" ")[1:]).lower().title().strip()
         if name not in phone_book.keys():
             return "invalid_contact", name
         else:
@@ -143,8 +119,16 @@ def help_me(*_):
             * 'name' can be more that one word and must contain at least one letter.
             'name' will be saved in title format (e.g. Musfer Adzhymambetov). 
             
-            ** 'number' must contain at least {min_len} digits, not more that one pair of '(' ')' brackets and 
-            may start with "+". All other characters except hyphens '-' are not allowed.
+            ** popular allowed phone numer formats:
+                +38 093 12 34 456
+                    093 12 344 56
+                        123 44 56
+                 38 093 12 34 456
+                +38 (093) 12 34 456
+            hyphens instead of spaces are allowed
+            General format using regular expressions:
+            '{phone_pattern}'
+            
             
             use '.', 'good bye', 'close', or 'exit' to shut down the assistant. '''
 
@@ -162,35 +146,39 @@ commands = {
     0: lambda *_: errors['not_found'](),
 }
 
+
 @log_decorator
-def def_mod(string: str):
-    if "." in string:
-        return "e"
-    elif string.lower() == "hello":
-        return "h"
-    elif string.lower().startswith("add"):
-        return "a"
-    elif string.lower().startswith("change"):
-        return "c"
-    elif string.lower().startswith("phone"):
-        return "p"
-    elif string.lower().startswith("show all"):
-        return "s"
-    elif string.lower() in ["good bye", "close", "exit"]:
-        return "g"
-    elif string.lower() == "help":
-        return "help"
-    elif not string.strip():
-        return "empty"
-    else:
-        return 0
+def def_mod(string: str):  # returns tuple of mod (user command) and other data (name and phone numer)
+    try:
+        mods = {
+            "hello": "h",
+            ".": "e",
+            "change": "c",
+            "phone": "p",
+            "show all": "s",
+            "good bye": "g",
+            "close": "g",
+            "exit": "g",
+            "help": "help",
+            "add": "a",
+        }
+        if not string:
+            return "empty", ""
+        for key_word in mods.keys():
+            if key_word in string:
+                return mods[key_word], string.replace(key_word, "")
+        return 0, ""
+    except Exception as err:
+        return err
 
 
 def main():
     print("Welcome to your personal Python assistant!")
+    print("What can I do for you today?")
     while True:
         command = input()
-        print(commands.get(def_mod(command))(command))
+        mod, data = def_mod(command)
+        print(commands.get(mod)(data))
 
 
 if __name__ == "__main__":
