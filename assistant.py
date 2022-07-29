@@ -50,7 +50,6 @@ def log_decorator(func):
 @log_decorator
 def show_all(*_):
     try:
-        out = ""
         if not phone_book:
             return "Your phone book is empty."
         out = "Here is the list of your contacts:\n"
@@ -136,7 +135,7 @@ def help_me(*_):
 commands = {
     "e": lambda *_: sys.exit(),
     "g": lambda *_: (print("Good bye!"), sys.exit()),
-    "h": lambda *_: "How can I help you?",
+    "h": lambda *_: "Hello! How can I help you?",
     "a": add,
     "c": change,
     "p": phone,
