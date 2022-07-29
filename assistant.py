@@ -8,26 +8,25 @@ phone_book = {
 
 
 errors = {
+    "empty_line": lambda *_: "Try to type something, or use 'help' to see what I can.",
     "not_found": lambda *_: "Sorry I can't understand you. Use 'help' to see what I can.",
     "missing_name": lambda *_: "It seems that you missed the name of contact. Please, try again.",
     "missing_number": lambda *_: """Sorry, I can't identify a valid phone number.
 Try 'help' command to see allowed formats.""",
     "name_exists": lambda x: "Contact '{}' already exists. Try 'change' command to rewrite it.".format(x),
     "name_not_found": lambda x: "Contact '{}' does not exist. Try 'add' command to create a new contact.".format(x),
-    "invalid_number": lambda x: "It seems that '{}' is not a valid phone number. Please, try again"
-                                " or type 'help' to know more about supported formats of phone number. ".format(x),
+    # "invalid_number": lambda x: "It seems that '{}' is not a valid phone number. Please, try again"
+    #                             " or type 'help' to know more about supported formats of phone number. ".format(x),
     "invalid_contact": lambda x: "Contact '{}' does not exist. Try 'add' him to your phone book.".format(x),
-    "name_number": lambda x: "'{}' expects name and phone number as keys.".format(x),
+    # "name_number": lambda x: "'{}' expects name and phone number as keys.".format(x),
 }
 
 
-def find_name_number(text: str):  # return tuple of name and number
+def find_name_number(text: str):  # text = 'name' 'number'
     pattern = re.compile(phone_pattern)
-    only_name = text
     if not pattern.findall(text):
         return find_name(text), ""
-    for x in pattern.findall(text):
-        only_name = only_name.replace(x, "")
+    only_name = text[:text.find(pattern.findall(text)[0])]
     return find_name(only_name), str(pattern.findall(text)[0]).strip().replace(" ", "").replace("", ""),
 
 
@@ -54,9 +53,10 @@ def show_all(*_):
         out = ""
         if not phone_book:
             return "Your phone book is empty."
+        out = "Here is the list of your contacts:\n"
         for name in phone_book.keys():
-            out += name + ": " + phone_book[name] + "\n"
-        return out
+            out += "\t"+name + ": " + phone_book[name] + "\n"
+        return out.strip()
     except Exception as err:
         return err
 
@@ -142,7 +142,7 @@ commands = {
     "p": phone,
     "s": show_all,
     "help": help_me,
-    "empty": lambda *_: errors['not_found'](),
+    "empty": lambda *_: errors["empty_line"](),
     0: lambda *_: errors['not_found'](),
 }
 
@@ -162,7 +162,7 @@ def def_mod(string: str):  # returns tuple of mod (user command) and other data 
             "help": "help",
             "add": "a",
         }
-        if not string:
+        if not string.strip():
             return "empty", ""
         for key_word in mods.keys():
             if key_word in string:
